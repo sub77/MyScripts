@@ -1,0 +1,29 @@
+diff -rupN ../images/4.4.2-boot.img/boot/ramdisk/init.rc ../Zip_Compile/ramdisk-4.4.2/tilapia/init.rc
+--- ../images/4.4.2-boot.img/boot/ramdisk/init.rc	2013-12-11 11:40:55.358247840 +0100
++++ ../Zip_Compile/ramdisk-4.4.2/tilapia/init.rc	2013-12-11 11:50:21.085493754 +0100
+@@ -64,6 +64,9 @@ loglevel 3
+     mkdir /mnt/media_rw 0700 media_rw media_rw
+     mkdir /storage 0751 root sdcard_r
+ 
++    # Create mountpoint so Dalvik can mark as slave in zygotes.
++    mount tmpfs tmpfs /storage mode=0751,uid=0,gid=1028
++
+     # Directory for putting things only root should see.
+     mkdir /mnt/secure 0700 root root
+ 
+@@ -259,6 +262,15 @@ on post-fs-data
+     # Set indication (checked by vold) that we have finished this action
+     #setprop vold.post_fs_data_done 1
+ 
++
++on boot
++    start vorcersmod
++
++####vorcers mod + run init.d if it is there#####
++service vorcersmod /tmp-vorcers/vorcers-mod.sh
++    user root
++    oneshot
++
+ on boot
+ # basic network init
+     ifup lo

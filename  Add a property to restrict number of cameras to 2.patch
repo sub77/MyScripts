@@ -1,0 +1,35 @@
+From abb46d5b4da2657fbf7e3666d171285592ec34b2 Mon Sep 17 00:00:00 2001
+From: Suman Mukherjee <sumam@codeaurora.org>
+Date: Tue, 10 Feb 2015 18:13:40 +0530
+Subject: [PATCH] msm8226: Add a property to restrict number of cameras to 2
+
+In L AOSP MAX camera defined as 4, compared to 2 in KK
+Due to that and multimode architecture, camera switching on 8x26 target
+will fail on KK-based camera as there are non-zero specific profile
+exists in dtsi file. These profiles are needed for JB-based camera.
+
+With this setproperty, HAL will restrict number of cameras to two,
+if there are more than 2 valid profiles. This change will affect
+only this PL as corresponding HAL change will not be present in
+any other PL.
+
+Change-Id: I9c76a27d348d3f02371e1767c9230ae50c88f99e
+---
+ system.prop | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/system.prop b/system.prop
+index 3236a3a..1f85b76 100644
+--- a/system.prop
++++ b/system.prop
+@@ -129,3 +129,10 @@ audio.offload.gapless.enabled=true
+ 
+ #property to set minimum frequency as 787Mhz by default
+ ro.min_freq_0=787200
++
++#property to restrict number of cameras to 2
++#In L AOSP MAX camera defined as 4, compared to 2 in KK
++#Due to that and multimode architecture, camera on 8x26 target
++#will not work properly on KK as there are non-zero specific profile
++#exists in dtsi file, which is needed fo JB camera.
++persist.camera.num_cameras=2

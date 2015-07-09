@@ -1,0 +1,58 @@
+From c98213fc29fed1a5461a8587476cd96036a36fbe Mon Sep 17 00:00:00 2001
+From: tobitege <tobiasteschner@googlemail.com>
+Date: Tue, 16 Jun 2015 15:25:39 +0200
+Subject: [PATCH] Revert "Display: Initialize mRotation to panel orientation."
+
+This should allow to fix rotation in landscape.
+Credits to Michael Bestas to pointing it out.
+
+This reverts commit 8936b23e413941fac6ec95273ed511f51cd3d939.
+
+Change-Id: Ic044bf68bab26f06595dbcc74ed4c97c8f0e0b77
+---
+ core/java/com/android/internal/view/RotationPolicy.java            | 6 ++----
+ services/core/java/com/android/server/wm/WindowManagerService.java | 2 +-
+ 2 files changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/core/java/com/android/internal/view/RotationPolicy.java b/core/java/com/android/internal/view/RotationPolicy.java
+index de703da..b479cb1 100644
+--- a/core/java/com/android/internal/view/RotationPolicy.java
++++ b/core/java/com/android/internal/view/RotationPolicy.java
+@@ -25,7 +25,6 @@
+ import android.os.AsyncTask;
+ import android.os.Handler;
+ import android.os.RemoteException;
+-import android.os.SystemProperties;
+ import android.os.UserHandle;
+ import android.provider.Settings;
+ import android.util.Log;
+@@ -141,8 +140,7 @@ public void run() {
+                 try {
+                     IWindowManager wm = WindowManagerGlobal.getWindowManagerService();
+                     if (enabled) {
+-                        wm.freezeRotation(SystemProperties.getInt(
+-                                          "persist.panel.orientation", 0) / 90);
++                        wm.freezeRotation(rotation);
+                     } else {
+                         wm.thawRotation();
+                     }
+@@ -196,4 +194,4 @@ public void onChange(boolean selfChange, Uri uri) {
+ 
+         public abstract void onChange();
+     }
+-}
++}
+\ No newline at end of file
+diff --git a/services/core/java/com/android/server/wm/WindowManagerService.java b/services/core/java/com/android/server/wm/WindowManagerService.java
+index 2eba81f..e4cef120 100644
+--- a/services/core/java/com/android/server/wm/WindowManagerService.java
++++ b/services/core/java/com/android/server/wm/WindowManagerService.java
+@@ -498,7 +498,7 @@ public void onReceive(Context context, Intent intent) {
+     /** All DisplayContents in the world, kept here */
+     SparseArray<DisplayContent> mDisplayContents = new SparseArray<DisplayContent>(2);
+ 
+-    int mRotation = SystemProperties.getInt("persist.panel.orientation", 0) / 90;
++    int mRotation = 0;
+     int mForcedAppOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+     boolean mAltOrientation = false;
+ 

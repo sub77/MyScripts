@@ -1,0 +1,117 @@
+From b358bf82c079a577f011c167da8b65faef73a06e Mon Sep 17 00:00:00 2001
+From: Mike Kasick <mike@kasick.org>
+Date: Thu, 17 Jan 2013 20:34:32 -0500
+Subject: [PATCH] Restrict slave mountspace so Dalvik apps can mount
+ system-wide volumes
+
+Android 4.2 implements multi-user storage using per-process mount
+namespaces.  Everything under "/" (the entire filesystem hierarchy) is
+marked as a recursive-slave mountspace for all zygote instances.  This is
+done so that user-storage sandbox mounts under /storage/emulated are hidden
+from other apps and users.
+
+Unfortunately this means that any Dalvik app (actually, any program whose
+clone/fork ancestry includes a Dalvik zygote, which is everything except
+services spawned directly from init) cannot mount system-wide volumes.
+Thus, apps like CifsManager are effectively broken in Android 4.2, since
+its cifs mounts are only visible to the CifsManager app itself.  All other
+apps see empty mountpoints instead of the mounted volume.  Furthermore,
+Linux provides no provision for a process to "escape" a recursive-slave
+mountspace in versions prior to Linux 3.8 (setns syscall).
+
+Here, we restrict rootfs-slave calls to /storage (and, due to a possible
+kernel bug, /mnt/shell/emulated) so that Dalvik apps can mount system-wide
+volumes elsewhere (with appropriate permission, as in earlier versions of
+Android), while retaining full multi-user storage compatibility.  It is
+made available as a kernel-based workaround for instances where libdvm can
+not be modified.
+
+This change requires that a tmpfs volume is mounted as /storage in init.rc.
+If this volume is unavailable, then we falls back to the previous behavior
+of marking the entire filesystem hierarchy as slave.
+
+*** Do not commit to CyanogenMod Project kernels, as a similar workaround
+    for this problem is patched in Zygote/Dalvik/libdvm instead.  ***
+---
+ fs/Kconfig     |   25 +++++++++++++++++++++++++
+ fs/namespace.c |   30 ++++++++++++++++++++++++++++++
+ 2 files changed, 55 insertions(+)
+
+diff --git a/fs/Kconfig b/fs/Kconfig
+index 88701cc..7ab9332 100644
+--- a/fs/Kconfig
++++ b/fs/Kconfig
+@@ -274,4 +274,29 @@ endif
+ source "fs/nls/Kconfig"
+ source "fs/dlm/Kconfig"
+ 
++config RESTRICT_ROOTFS_SLAVE
++	bool "Android: Restrict rootfs slave mountspace to /storage"
++	help
++	  Restrict slave mountspace so Dalvik apps can mount system-wide volumes
++
++	  Android 4.2 implements multi-user storage using per-process mount
++	  namespaces.  Everything under "/" (the entire filesystem hierarchy) is
++	  marked as a recursive-slave mountspace for all zygote instances.  This is
++	  done so that user-storage sandbox mounts under /storage/emulated are hidden
++	  from other apps and users.  Unfortunately this means that any Dalvik app
++	  (actually, any program whose clone/fork ancestry includes a Dalvik zygote,
++	  which is everything except services spawned directly from init) cannot
++	  mount system-wide volumes.
++
++	  This option restricts rootfs-slave calls to /storage (and
++	  /mnt/shell/emulated) so that Dalvik apps can mount system-wide volumes
++	  elsewhere (with appropriate permission, as in earlier versions of Android),
++	  while retaining full multi-user storage compatibility.  It is made
++	  available as a kernel-based workaround for instances where libdvm can not
++	  be modified.
++
++	  This option requires that a tmpfs volume is mounted as /storage in
++	  Android init.rc.  If this volume is unavailable, then we fall back to the
++	  previous behavior of marking the entire filesystem hierarchy as slave.
++
+ endmenu
+diff --git a/fs/namespace.c b/fs/namespace.c
+index 3e09445..13e9eaa 100644
+--- a/fs/namespace.c
++++ b/fs/namespace.c
+@@ -2302,6 +2302,36 @@ long do_mount(char *dev_name, char *dir_name, char *type_page,
+ 	if (data_page)
+ 		((char *)data_page)[PAGE_SIZE - 1] = 0;
+ 
++#ifdef CONFIG_RESTRICT_ROOTFS_SLAVE
++	/* Check if this is an attempt to mark "/" as recursive-slave. */
++	if (strcmp(dir_name, "/") == 0 && flags == (MS_SLAVE | MS_REC)) {
++		static const char storage[] = "/storage";
++		static const char source[]  = "/mnt/shell/emulated";
++		long res;
++
++		/* Mark /storage as recursive-slave instead. */
++		if ((res = do_mount(NULL, (char *)storage, NULL, (MS_SLAVE | MS_REC), NULL)) == 0) {
++			/* Unfortunately bind mounts from outside /storage may retain the
++			 * recursive-shared property (bug?).  This means any additional
++			 * namespace-specific bind mounts (e.g., /storage/emulated/0/Android/obb)
++			 * will also appear, shared in all namespaces, at their respective source
++			 * paths (e.g., /mnt/shell/emulated/0/Android/obb), possibly leading to
++			 * hundreds of /proc/mounts-visible bind mounts.  As a workaround, mark
++			 * /mnt/shell/emulated also as recursive-slave so that subsequent bind
++			 * mounts are confined to their namespaces. */
++			if ((res = do_mount(NULL, (char *)source, NULL, (MS_SLAVE | MS_REC), NULL)) == 0)
++				/* Both paths successfully marked as slave, leave the rest of the
++				 * filesystem hierarchy alone. */
++				return 0;
++			else
++				pr_warn("Failed to mount %s as MS_SLAVE: %ld\n", source, res);
++		} else {
++			pr_warn("Failed to mount %s as MS_SLAVE: %ld\n", storage, res);
++		}
++		/* Fallback: Mark rootfs as recursive-slave as requested. */
++	}
++#endif
++
+ 	/* ... and get the mountpoint */
+ 	retval = kern_path(dir_name, LOOKUP_FOLLOW, &path);
+ 	if (retval)
+-- 
+1.7.10.4
+

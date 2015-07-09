@@ -1,0 +1,53 @@
+From aa7b2e205a8f72f90ff0547221e19742ad3c0014 Mon Sep 17 00:00:00 2001
+From: sub77 <sub77@ymail.com>
+Date: Tue, 23 Jun 2015 16:35:48 +0200
+Subject: [PATCH] Display: Initialize mRotation to panel orientation.
+
+Change-Id: Idaa64946ed911c7490877262c1e0606c94cb74b8
+---
+ core/java/com/android/internal/view/RotationPolicy.java            | 6 ++----
+ services/core/java/com/android/server/wm/WindowManagerService.java | 2 +-
+ 2 files changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/core/java/com/android/internal/view/RotationPolicy.java b/core/java/com/android/internal/view/RotationPolicy.java
+index de703da..b479cb1 100644
+--- a/core/java/com/android/internal/view/RotationPolicy.java
++++ b/core/java/com/android/internal/view/RotationPolicy.java
+@@ -25,7 +25,6 @@
+ import android.os.AsyncTask;
+ import android.os.Handler;
+ import android.os.RemoteException;
+-import android.os.SystemProperties;
+ import android.os.UserHandle;
+ import android.provider.Settings;
+ import android.util.Log;
+@@ -141,8 +140,7 @@ public void run() {
+                 try {
+                     IWindowManager wm = WindowManagerGlobal.getWindowManagerService();
+                     if (enabled) {
+-                        wm.freezeRotation(SystemProperties.getInt(
+-                                          "persist.panel.orientation", 0) / 90);
++                        wm.freezeRotation(rotation);
+                     } else {
+                         wm.thawRotation();
+                     }
+@@ -196,4 +194,4 @@ public void onChange(boolean selfChange, Uri uri) {
+ 
+         public abstract void onChange();
+     }
+-}
++}
+\ No newline at end of file
+diff --git a/services/core/java/com/android/server/wm/WindowManagerService.java b/services/core/java/com/android/server/wm/WindowManagerService.java
+index 1ba1881..dfaf3b0 100644
+--- a/services/core/java/com/android/server/wm/WindowManagerService.java
++++ b/services/core/java/com/android/server/wm/WindowManagerService.java
+@@ -482,7 +482,7 @@ public void onReceive(Context context, Intent intent) {
+     /** All DisplayContents in the world, kept here */
+     SparseArray<DisplayContent> mDisplayContents = new SparseArray<DisplayContent>(2);
+ 
+-    int mRotation = SystemProperties.getInt("persist.panel.orientation", 0) / 90;
++    int mRotation = 0;
+     int mForcedAppOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+     boolean mAltOrientation = false;
+ 

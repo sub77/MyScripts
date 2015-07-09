@@ -1,0 +1,189 @@
+From 30d43681949efb59681bb68b9f323e53afb9dd44 Mon Sep 17 00:00:00 2001
+From: Anthony King <anthonydking@slimroms.net>
+Date: Fri, 26 Dec 2014 17:36:44 +0000
+Subject: [PATCH] non-pie: Allow only select libs to be non-pie
+
+A header is created to list the names of all the libs
+that aren't PIEs (see non_pie.cpp for the array example).
+
+This attempts to limit the security risk of non-PIEs, while
+maintaining support for devices that are stuck with non-PIE blobs.
+
+Change-Id: Ife1b2fcc75b418379fc382ae276e63905e8528e0
+---
+ linker/Android.mk  |  6 ++++--
+ linker/linker.cpp  | 19 ++++++++++++++++---
+ linker/non_pie.cpp | 48 ++++++++++++++++++++++++++++++++++++++++++++++++
+ linker/non_pie.h   | 34 ++++++++++++++++++++++++++++++++++
+ 4 files changed, 102 insertions(+), 5 deletions(-)
+ create mode 100644 linker/non_pie.cpp
+ create mode 100644 linker/non_pie.h
+
+diff --git a/linker/Android.mk b/linker/Android.mk
+index a46784c..d71eb49 100644
+--- a/linker/Android.mk
++++ b/linker/Android.mk
+@@ -38,8 +38,10 @@ LOCAL_CPPFLAGS += \
+ # We need to access Bionic private headers in the linker.
+ LOCAL_CFLAGS += -I$(LOCAL_PATH)/../libc/
+ 
+-ifeq ($(TARGET_NEEDS_NON_PIE_SUPPORT),true)
+-  LOCAL_CFLAGS += -DENABLE_NON_PIE_SUPPORT
++ifneq ($(NON_PIE_SUPPORT_HEADER_DIR),)
++    LOCAL_CFLAGS += -DENABLE_NON_PIE_SUPPORT
++    LOCAL_C_INCLUDES += $(NON_PIE_SUPPORT_HEADER_DIR)
++    LOCAL_SRC_FILES += non_pie.cpp
+ endif
+ 
+ # we don't want crtbegin.o (because we have begin.o), so unset it
+diff --git a/linker/linker.cpp b/linker/linker.cpp
+index 416f061..9cca4d6 100644
+--- a/linker/linker.cpp
++++ b/linker/linker.cpp
+@@ -50,6 +50,10 @@
+ #include "linker_phdr.h"
+ #include "linker_allocator.h"
+ 
++#ifdef ENABLE_NON_PIE_SUPPORT
++#include "non_pie.h"
++#endif
++
+ /* >>> IMPORTANT NOTE - READ ME BEFORE MODIFYING <<<
+  *
+  * Do NOT use malloc() and friends or pthread_*() code here.
+@@ -1305,7 +1309,9 @@ static int soinfo_relocate(soinfo* si, ElfW(Rel)* rel, unsigned count, soinfo* n
+             *reinterpret_cast<ElfW(Addr)*>(reloc) += sym_addr - rel->r_offset;
+             break;
+         case R_ARM_COPY:
+-#ifndef ENABLE_NON_PIE_SUPPORT
++#ifdef ENABLE_NON_PIE_SUPPORT
++            if (!allow_non_pie(si->name)) {
++#endif
+             /*
+              * ET_EXEC is not supported so this should not happen.
+              *
+@@ -1317,7 +1323,8 @@ static int soinfo_relocate(soinfo* si, ElfW(Rel)* rel, unsigned count, soinfo* n
+              */
+             DL_ERR("%s R_ARM_COPY relocations are not supported", si->name);
+             return -1;
+-#else
++#ifdef ENABLE_NON_PIE_SUPPORT
++            }
+             if ((si->flags & FLAG_EXE) == 0) {
+                 /*
+                  * http://infocenter.arm.com/help/topic/com.arm.doc.ihi0044d/IHI0044D_aaelf.pdf
+@@ -2222,13 +2229,19 @@ static ElfW(Addr) __linker_init_post_relocation(KernelArgumentBlock& args, ElfW(
+     si->dynamic = NULL;
+     si->ref_count = 1;
+ 
+-#ifndef ENABLE_NON_PIE_SUPPORT
+     ElfW(Ehdr)* elf_hdr = reinterpret_cast<ElfW(Ehdr)*>(si->base);
+     if (elf_hdr->e_type != ET_DYN) {
++#ifdef ENABLE_NON_PIE_SUPPORT
++    if (allow_non_pie(si->name)) {
++        __libc_format_fd(2, "warning: non position independent executable (non PIE) %s allowed\n", si->name);
++    } else {
++#endif
+         __libc_format_fd(2, "error: only position independent executables (PIE) are supported.\n");
+         exit(EXIT_FAILURE);
++#ifdef ENABLE_NON_PIE_SUPPORT
+     }
+ #endif
++    }
+ 
+     // Use LD_LIBRARY_PATH and LD_PRELOAD (but only if we aren't setuid/setgid).
+     parse_LD_LIBRARY_PATH(ldpath_env);
+diff --git a/linker/non_pie.cpp b/linker/non_pie.cpp
+new file mode 100644
+index 0000000..f9dde17
+--- /dev/null
++++ b/linker/non_pie.cpp
+@@ -0,0 +1,48 @@
++/*
++ * Copyright (C) 2014 The Android Open Source Project
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ *  * Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ *  * Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in
++ *    the documentation and/or other materials provided with the
++ *    distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
++ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
++ * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
++ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
++ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
++ * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
++ * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
++ * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ */
++
++/*
++ * non_pie_blobs.h contain an array of the form:
++const char* non_pie_blob_list[] = {
++        "/system/lib/lib_name.so",
++        "/system/bin/bin_name"
++}
++ */
++
++#include <string.h>
++#include "non_pie_blobs.h"
++
++int allow_non_pie(char* lib_name)
++{
++    int array_len = sizeof(non_pie_blob_list)/sizeof(*non_pie_blob_list);
++    for (int n = 0; n < array_len; n++) {
++        if (strcmp(non_pie_blob_list[n], lib_name) == 0)
++            return 1;
++    }
++    return 0;
++}
+diff --git a/linker/non_pie.h b/linker/non_pie.h
+new file mode 100644
+index 0000000..0050e70
+--- /dev/null
++++ b/linker/non_pie.h
+@@ -0,0 +1,34 @@
++/*
++ * Copyright (C) 2014 The Android Open Source Project
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ *  * Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ *  * Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in
++ *    the documentation and/or other materials provided with the
++ *    distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
++ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
++ * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
++ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
++ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
++ * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
++ * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
++ * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ */
++
++#ifndef NON_ARM_PIE_H
++#define NON_ARM_PIE_H
++
++int allow_non_pie(char* lib_name);
++
++#endif

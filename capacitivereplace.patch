@@ -1,0 +1,91 @@
+From 9279d00ba184a1edb3b7f51910d727e02a9849e1 Mon Sep 17 00:00:00 2001
+From: "Christopher R. Palmer" <crpalmer@gmail.com>
+Date: Fri, 3 Oct 2014 15:18:16 -0400
+Subject: [PATCH] mondrianwifi: Allow capacitive buttons to be replaced by nav
+ bar
+
+Change-Id: I908cabe09467b393bb0c74489c3c0a3f2d89b0d1
+---
+ BoardConfig.mk                                 |  3 ++
+ cmhw/org/cyanogenmod/hardware/KeyDisabler.java | 44 ++++++++++++++++++++++++++
+ rootdir/etc/init.qcom.rc                       |  2 ++
+ 3 files changed, 49 insertions(+)
+ create mode 100644 cmhw/org/cyanogenmod/hardware/KeyDisabler.java
+
+diff --git a/BoardConfig.mk b/BoardConfig.mk
+index 9fa1b7f..73f6b36 100644
+--- a/BoardConfig.mk
++++ b/BoardConfig.mk
+@@ -65,6 +65,9 @@ TARGET_NO_RPC := true
+ TARGET_GPS_HAL_PATH := device/samsung/mondrianwifi/gps
+ TARGET_PROVIDES_GPS_LOC_API := true
+ 
++# Hardware
++BOARD_HARDWARE_CLASS += device/samsung/mondrianwifi/cmhw
++
+ # Init
+ TARGET_INIT_VENDOR_LIB := libinit_msm
+ TARGET_LIBINIT_DEFINES_FILE := device/samsung/mondrianwifi/init/init_mondrianwifi.c
+diff --git a/cmhw/org/cyanogenmod/hardware/KeyDisabler.java b/cmhw/org/cyanogenmod/hardware/KeyDisabler.java
+new file mode 100644
+index 0000000..77fdaa9
+--- /dev/null
++++ b/cmhw/org/cyanogenmod/hardware/KeyDisabler.java
+@@ -0,0 +1,44 @@
++/*
++ * Copyright (C) 2014 The CyanogenMod Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package org.cyanogenmod.hardware;
++
++import org.cyanogenmod.hardware.util.FileUtils;
++
++/*
++ * Disable capacitive keys
++ *
++ * This is intended for use on devices in which the capacitive keys
++ * can be fully disabled for replacement with a soft navbar. You
++ * really should not be using this on a device with mechanical or
++ * otherwise visible-when-inactive keys
++ */
++
++public class KeyDisabler {
++
++    private static String CONTROL_PATH = "/sys/class/sec/sec_touchkey/tsp_keys_enabled";
++
++    public static boolean isSupported() { return true; }
++
++    public static boolean isActive() {
++        return (FileUtils.readOneLine(CONTROL_PATH).equals("0"));
++    }
++
++    public static boolean setActive(boolean state) {
++        return FileUtils.writeLine(CONTROL_PATH, (state ? "0" : "1"));
++    }
++
++}
+diff --git a/rootdir/etc/init.qcom.rc b/rootdir/etc/init.qcom.rc
+index 2f26d72..98af45e 100755
+--- a/rootdir/etc/init.qcom.rc
++++ b/rootdir/etc/init.qcom.rc
+@@ -126,6 +126,8 @@ on boot
+     mkdir /dev/socket/qmux_gps 0770 gps gps
+     chmod 2770 /dev/socket/qmux_gps
+ 
++    chown root system /sys/class/sec/sec_touchkey/tsp_keys_enabled
++
+     # Allow QMUX daemon to assign port open wait time
+     chown radio radio /sys/devices/virtual/hsicctl/hsicctl0/modem_wait
+ 

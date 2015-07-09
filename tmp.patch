@@ -1,0 +1,48 @@
+From ae1912432fd389af5b5b9e47029782ced4d4ea83 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Pawe=C5=82=20Chmiel?= <pawel.mikolaj.chmiel@gmail.com>
+Date: Sat, 17 Jan 2015 18:42:49 +0100
+Subject: [PATCH] Reserve memory for KEXEC_HARDOBOOT in board file. This way we
+ can use it on stock rom, without need to rebuild and replace dts.img.
+
+---
+ arch/arm/mach-msm/board-8226.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/arch/arm/mach-msm/board-8226.c b/arch/arm/mach-msm/board-8226.c
+index 1d2422c..05c7672 100644
+--- a/arch/arm/mach-msm/board-8226.c
++++ b/arch/arm/mach-msm/board-8226.c
+@@ -70,6 +70,10 @@
+ #include <mach/msm8x26-thermistor.h>
+ #endif
+ 
++#ifdef CONFIG_KEXEC_HARDBOOT
++#include <linux/memblock.h>
++#endif
++
+ static struct memtype_reserve msm8226_reserve_table[] __initdata = {
+ 	[MEMTYPE_SMI] = {
+ 	},
+@@ -134,12 +138,22 @@ static void __init msm8226_early_memory(void)
+ 
+ static void __init msm8226_reserve(void)
+ {
++#ifdef CONFIG_KEXEC_HARDBOOT
++	int ret;
++#endif
+ 	reserve_info = &msm8226_reserve_info;
+ 	of_scan_flat_dt(dt_scan_for_memory_reserve, msm8226_reserve_table);
+ 	msm_reserve();
+ #ifdef CONFIG_ANDROID_PERSISTENT_RAM
+ 	persistent_ram_early_init(&per_ram);
+ #endif
++#ifdef CONFIG_KEXEC_HARDBOOT
++	ret = memblock_remove(KEXEC_HB_PAGE_ADDR, SZ_1M);
++	if(!ret)
++		pr_info("Hardboot page reserved at 0x%lu\n", KEXEC_HB_PAGE_ADDR);
++	else
++		pr_err("Failed to reserve space for hardboot page at 0x%lu!\n", KEXEC_HB_PAGE_ADDR);
++#endif
+ }
+ 
+ /*
