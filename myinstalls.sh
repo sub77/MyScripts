@@ -36,7 +36,7 @@ case "$CINST" in
 			sudo apt-get install git ccache automake lzop bison gperf build-essential zip curl zlib1g-dev zlib1g-dev:i386 g++-multilib python-networkx libxml2-utils bzip2 libbz2-dev libbz2-1.0 libghc-bzlib-dev squashfs-tools pngcrush schedtool dpkg-dev liblz4-tool make optipng
 			mkdir ~/bin && curl http://commondatastorage.googleapis.com/git-repo-downloads/repo > ~/bin/repo && chmod a+x ~/bin/repo
             ;;
-        6) echo "Install essential build tools"
+        6) echo "Install lzma backports - multilibs"
 			sudo apt-get install liblzma-dev python-dev librsync-dev
 			sudo pip install backports.ssl_match_hostname
 			git clone git://github.com/peterjc/backports.lzma.git
@@ -44,6 +44,8 @@ case "$CINST" in
 			sudo python setup.py install
 			cd test
 			sudo python test_lzma.py
+			sudo apt-get install lib32z1 lib32ncurses5 lib32bz2-1.0
+			
             ;;
         *) echo "Quit!"
             ;;
