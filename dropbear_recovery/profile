@@ -26,9 +26,10 @@ shopt -s histappend
 use_color=false
 
 # set some environment variables
-export HOME=/sdcard
-export TERM=xterm
-export PATH=$PATH:/data/local/bin:/data/local/xbin:/data/local/sbin
+export HOME=/sdcard/.ssh/
+export TERMINFO=/sdcard/.ssh/etc/terminfo/ 
+export TERM=linux
+export PATH=$PATH:/sdcard/.ssh/xbin:/data/local/bin:/data/local/xbin:/data/local/sbin
 
 # enable colorful terminal
 if [[ ${EUID} == 0 ]] ; then

@@ -1,0 +1,27 @@
+on early-init
+    # exfat
+    # insmod /system/lib/modules/texfat.ko
+
+on boot
+    write /sys/devices/platform/android_usb/usb_function_switch 130
+
+    start enable_sshd
+
+on property:sys.usb.config=adb
+    write /sys/class/android_usb/android0/f_ffs/on 1
+    write /sys/class/android_usb/android0/f_adb/on 1
+    write /sys/devices/platform/android_usb/usb_function_switch 3
+    setprop sys.usb.state ${sys.usb.config}
+
+on property:sys.usb.config=mtp,adb
+    write /sys/devices/platform/android_usb/usb_function_switch 130
+    setprop sys.usb.state ${sys.usb.config}
+
+service enable_sshd /sbin/enable_sshd
+    disabled
+    seclabel u:r:recovery:s0
+
+service disable_sshd /sbin/disable_sshd
+    disabled
+    seclabel u:r:recovery:s0
+

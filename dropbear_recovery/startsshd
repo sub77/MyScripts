@@ -1,5 +1,25 @@
+#/sbin/bashlogin
+
+sleep 5
+
+if [[ -f /sdcard/.ssh/sshd.conf ]]; then
+. /sdcard/.ssh/sshd.conf 
+export HOME=$HOME
+export TERMININFO=~/etc/terminfo
+export TERM=xterm
+fi
+
+if [[ -f /sdcard/.ssh/profile ]]; then
+cp /sdcard/.ssh/profile /etc/profile
+fi
+
 if [[ ! -f /etc/profile ]]; then
 cp /sbin/profile /etc/profile
+fi
+
+if [[ ! -f /system/usr/share/zoneinfo/tzdata && -f ~/etc/tzdata ]]; then
+mkdir -p /system/usr/share/zoneinfo
+cp ~/etc/tzdata /system/usr/share/zoneinfo/tzdata
 fi
 
 if [[ ! -f /system/bin ]]; then
@@ -40,7 +60,6 @@ echo ""
 echo "done"
 
 exit 0
-
 
 
 
